@@ -4,6 +4,18 @@ import viteLogo from '/vite.svg'
 import './App.css'
 import * as React from 'react';
 
+const useStorageState = (key, initialState) =>
+{
+  const [value, setValue] = React.useState(
+    localStorage.getItem(key) || initialState
+  );
+  React.useEffect(() =>
+  {
+    localStorage.setItem(key, value);
+  }, [value, key]);
+  return [value, setValue];
+}
+
 const App = () =>
 {
   const stories = [
@@ -41,7 +53,8 @@ const App = () =>
     },
   ];
 
-  const [searchTerm, setSearchTerm] = React.useState('');
+  const [searchTerm, setSearchTerm] = useStorageState('search', 'React');
+
 
   const handleSearch = (event) =>
   {
@@ -56,7 +69,7 @@ const App = () =>
     <div>
       <h1>My Hacker Stories</h1>
 
-      <Search onSearch={handleSearch} />
+      <Search search={searchTerm} onSearch={handleSearch} />
 
       <hr />
 
@@ -65,31 +78,37 @@ const App = () =>
   );
 };
 
-const Search = (props) => (
-  <div>
+const Search = ({ search, onSearch }) =>
+(
+  <>
     <label htmlFor="search">Search: </label>
-    <input id="search" type="text" onChange={props.onSearch} />
-  </div>
+    <input
+      id="search"
+      type="text"
+      value={search}
+      onChange={onSearch} />
+  </>
 );
 
-const List = (props) => (
+
+const List = ({ list }) => (
   <ul>
-    {props.list.map((item) => (
+    {list.map((item) => (
       <Item key={item.objectID} item={item} />
     ))}
   </ul>
 );
 
-const Item = (props) => (
+const Item = ({ item }) => (
   <li>
     <span>
-      <a href={props.item.url}>{props.item.title}</a>
+      <a href={item.url}>{item.title}</a>
     </span>
-    <span>{props.item.author}</span>
-    <span>{props.item.num_comments}</span>
-    <span>{props.item.points}</span>
+    <span>{item.author}</span>
+    <span>{item.num_comments}</span>
+    <span>{item.points}</span>
   </li>
-);
+)
 
 
 export default App
