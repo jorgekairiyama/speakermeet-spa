@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+//import { useState } from 'react'
+// import reactLogo from './assets/react.svg'
+// import viteLogo from '/vite.svg'
 import './App.css'
 import * as React from 'react';
+import axios from 'axios';
 
 const useStorageState = (key, initialState) =>
 {
@@ -16,90 +17,173 @@ const useStorageState = (key, initialState) =>
   return [value, setValue];
 }
 
+const API_ENDPOINT = 'https://hn.algolia.com/api/v1/search?query=';
+
 const App = () =>
 {
-  const stories = [
+
+  const storiesReducer = (state, action) =>
+  {
+    switch (action.type)
     {
-      title: 'React',
-      url: 'https://reactjs.org/',
-      author: 'Jordan Walke',
-      num_comments: 3,
-      points: 4,
-      objectID: 0,
-    },
-    {
-      title: 'Redux',
-      url: 'https://redux.js.org/',
-      author: 'Dan Abramov, Andrew Clark',
-      num_comments: 2,
-      points: 5,
-      objectID: 1,
-    },
-    {
-      title: 'React Native',
-      url: 'https://reactnativejs.js.org/',
-      author: 'Dan Clark, Andrew Abramov',
-      num_comments: 2,
-      points: 5,
-      objectID: 2,
-    },
-    {
-      title: 'Nockoutjs',
-      url: 'https://nockoutjs.js.org/',
-      author: 'Isaac Abramov',
-      num_comments: 1,
-      points: 7,
-      objectID: 3,
-    },
-  ];
+      case 'STORIES_FETCH_INIT':
+        return {
+          ...state,
+          isLoading: true,
+          isError: false,
+        };
+      case 'STORIES_FETCH_SUCCESS':
+        return {
+          ...state,
+          isLoading: false,
+          isError: false,
+          data: action.payload,
+        };
+      case 'STORIES_FETCH_FAILURE':
+        return {
+          ...state,
+          isLoading: false,
+          isError: true,
+        };
+      case 'REMOVE_STORY':
+        return {
+          ...state,
+          data: state.data.filter(
+            (story) => action.payload.objectID !== story.objectID
+          ),
+        };
+      default:
+        throw new Error();
+    }
+  };
 
   const [searchTerm, setSearchTerm] = useStorageState('search', 'React');
+  const [url, setUrl] = React.useState(`${API_ENDPOINT}${searchTerm}`);
 
+  const [stories, dispatchStories] = React.useReducer(storiesReducer,
+    { data: [], isLoading: false, isError: false });
 
-  const handleSearch = (event) =>
+  const handleFetchStories = React.useCallback(async () =>
+  {
+    if (!searchTerm) return;
+    dispatchStories({ type: 'STORIES_FETCH_INIT' });
+    try
+    {
+      const result = await axios.get(url);
+
+      dispatchStories({
+        type: 'STORIES_FETCH_SUCCESS',
+        payload: result.data.hits,
+      });
+    } catch
+    {
+      dispatchStories({ type: 'STORIES_FETCH_FAILURE' });
+    }
+
+  }, [url]);
+
+  React.useEffect(() =>
+  {
+    handleFetchStories();
+  }, [handleFetchStories]);
+
+  const handleRemoveStory = (item) =>
+  {
+    dispatchStories({ type: 'REMOVE_STORY', payload: item, });
+  }
+
+  const handleSearchInput = (event) =>
   {
     setSearchTerm(event.target.value);
   };
 
-  const searchedStories = stories.filter((story) =>
-    story.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleSearchSubmit = (event) =>
+  {
+    setUrl(`${API_ENDPOINT}${searchTerm}`);
+
+    event.preventDefault();
+  };
 
   return (
     <div>
       <h1>My Hacker Stories</h1>
-
-      <Search search={searchTerm} onSearch={handleSearch} />
-
+      <SearchForm
+        searchTerm={searchTerm}
+        onSearchInput={handleSearchInput}
+        onSearchSubmit={handleSearchSubmit}
+      />
       <hr />
 
-      <List list={searchedStories} />
+      {stories.isError && <p>Something went wrong ...</p>}
+
+      {stories.isLoading ? (
+        <p>Loading ...</p>
+      ) : (
+        <List
+          list={stories.data}
+          onRemoveItem={handleRemoveStory}
+        />
+      )}
+
     </div>
   );
 };
 
-const Search = ({ search, onSearch }) =>
-(
-  <>
-    <label htmlFor="search">Search: </label>
-    <input
+const SearchForm = ({
+  searchTerm,
+  onSearchInput,
+  onSearchSubmit,
+}) => (
+  <form onSubmit={onSearchSubmit}>
+    <InputWithLabel
       id="search"
-      type="text"
-      value={search}
-      onChange={onSearch} />
-  </>
+      value={searchTerm}
+      isFocused
+      onInputChange={onSearchInput}
+    >
+      <strong>Search:</strong>
+    </InputWithLabel>
+    <button type="submit" disabled={!searchTerm}>
+      Submit
+    </button>
+  </form>
 );
 
+const InputWithLabel = ({
+  id,
+  value,
+  type = 'text',
+  isFocused,
+  onInputChange,
+  children,
+}) => (
+  <>
+    <label htmlFor={id}>{children}</label>
+    &nbsp;
+    <input
+      id={id}
+      type={type}
+      value={value}
+      autoFocus={isFocused}
+      onChange={onInputChange}
+    />
+  </>
+)
 
-const List = ({ list }) => (
+
+const List = ({ list, onRemoveItem }) => (
   <ul>
     {list.map((item) => (
-      <Item key={item.objectID} item={item} />
+      <Item
+        key={item.objectID}
+        item={item}
+        onRemoveItem={onRemoveItem}
+      />
     ))}
   </ul>
 );
 
-const Item = ({ item }) => (
+const Item = ({ item, onRemoveItem }) => (
   <li>
     <span>
       <a href={item.url}>{item.title}</a>
@@ -107,6 +191,11 @@ const Item = ({ item }) => (
     <span>{item.author}</span>
     <span>{item.num_comments}</span>
     <span>{item.points}</span>
+    <span>
+      <button type="button" onClick={() => onRemoveItem(item)}>
+        Dismiss
+      </button>
+    </span>
   </li>
 )
 
